@@ -150,8 +150,16 @@ func deleteLatencyHandler(w http.ResponseWriter, r *http.Request) {
 	cmdFilter := exec.Command("nsenter", "-t", pidStr, "-n", "tc", "filter", "del", "dev", "eth0", "parent", "1:0", "prio", prioStr)
 	cmdFilter.CombinedOutput()
 
+	cmdQdisc := exec.Command("nsenter", "-t", pidStr, "-n", "tc", "qdisc", "del", "dev", "eth0", "parent", classID)
+	output, err := cmdQdisc.CombinedOutput()
+	if err != nil && !strings.Contains(string(output), "No such file or directory") {
+		log.Printf("Error deleting qdisc for %s: %s - %v", classID, string(output), err)
+		http.Error(w, fmt.Sprintf("Error deleting qdisc: %s", string(output)), http.StatusInternalServerError)
+		return
+	}
+
 	cmd := exec.Command("nsenter", "-t", pidStr, "-n", "tc", "class", "del", "dev", "eth0", "classid", classID)
-	output, err := cmd.CombinedOutput()
+	output, err = cmd.CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(output), "No such file or directory") || strings.Contains(string(output), "We have an error talking to the kernel") {
 			log.Printf("Class %s didnt exist in PID %s. Ignoring.", classID, pidStr)
